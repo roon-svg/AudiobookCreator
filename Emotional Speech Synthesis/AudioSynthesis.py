@@ -10,6 +10,7 @@ import os
 class AudioSynthesier:
     def __init__(self, textArea: QTextEdit):
 
+        # This allows for the text area to be accessed and manipulated, as well as the cursor and document
         self.textArea = textArea
         self.doc = textArea.document()
         self.cursor = QTextCursor(self.doc)
@@ -19,6 +20,7 @@ class AudioSynthesier:
         self.audioChunks = []
 
     def getTextWithEmotions(self):
+        # This function goes through the text and gets the text and the emotion connected to it, then adds it to a list of tuples
         TextToConvertToSpeech = []
         currentEmotion = None
         currentText = ""
@@ -48,9 +50,7 @@ class AudioSynthesier:
             else:
                 newEmotion = "Neutral"
 
-            import gc
-            gc.collect()
-
+            # This checks if the emotion has changed, if it has then it adds the text and emotion to the list, if not it just adds the text to the current text
             if currentEmotion is None:
                 currentEmotion = newEmotion
                 currentText = CursText
@@ -79,6 +79,7 @@ class AudioSynthesier:
             "WAV Files (*.wav);;All Files (*)"
         )
 
+        # If there is no save path, then the function is exited
         if not save_path:
             return
 
@@ -96,20 +97,21 @@ class AudioSynthesier:
 
         for text, emotion in TextToConvertToSpeech:
             
-            tempFileName = f"temp_audio_{audioChunksIndex}.mp3"
+            tempFileName = f"temp_audio_{audioChunksIndex}.wav"
             tempFileNames.append(tempFileName)
 
             tts = gtts.gTTS(text)
             tts.save(tempFileName)
 
+            # This checks the emotion and then calls the corresponding function to synthesise the audio, then it removes the temporary file
             if emotion == "Anger":
-                self.AngrySynthesise(tempFileName, audioChunksIndex)
+                self.AngrySynthesise(tempFileName)
             elif emotion == "Sadness":
-                self.SadnessSynthesise(tempFileName, audioChunksIndex)
+                self.SadnessSynthesise(tempFileName)
             elif emotion == "Happiness":
-                self.HappinessSynthesise(tempFileName, audioChunksIndex)
+                self.HappinessSynthesise(tempFileName)
             else:
-                self.NeutralSynthesis(tempFileName, audioChunksIndex)
+                self.NeutralSynthesis(tempFileName)
             
             if os.path.exists(tempFileName):
                 os.remove(tempFileName)
@@ -119,20 +121,26 @@ class AudioSynthesier:
             tensors = []
             targetSr = 24000
             
+            # This resamples the audio chunks to the sample rate and then joints them together
             for wave, sr in self.audioChunks:
                 if sr != targetSr:
                     wave = f.resample(wave, sr, targetSr)
                 tensors.append(wave)
                 
-            finalAudio = torch.cat(tensors, dim=1)
-            torchaudio.save(self.outputFilename, finalAudio, targetSr)
-            print(f"Audiobook successfully generated: {self.outputFilename}")
+            try:
+                finalAudio = torch.cat(tensors, dim=1)
+                torchaudio.save(save_path, finalAudio, targetSr)
+                print(f"Audiobook successfully generated: {save_path}")
+            except Exception as e:
+                print(f"Error generating audiobook: {e}")
             
             for i in range(audioChunksIndex):
                 if os.path.exists(f"processed_{i}.wav"):
                     os.remove(f"processed_{i}.wav")
         
         import gc
+        # Clean up lists and trigger global garbage collection safely at the very end
+        self.audioChunks = []
         gc.collect()
         for file in tempFileNames:
             try:
@@ -144,10 +152,14 @@ class AudioSynthesier:
                 print(f"Error removing temporary file {file}: {e}")
 
     
-    def AngrySynthesise(self, filepath, index):
+    # These functions make the audio sound more like the emotion, by changing the speed, pitch, gain and overdrive
+    def AngrySynthesise(self, filepath):
         waveform, sample_rate = torchaudio.load(filepath)
 
-        waveform = f.speed(waveform, sample_rate, 1.2)
+        if sample_rate is None:
+            sample_rate = 24000
+
+        waveform, sample_rate = f.speed(waveform, sample_rate, 1.2)
         waveform = f.pitch_shift(waveform, sample_rate, n_steps=4)
         waveform = f.gain(waveform, gain_db=5)
         waveform = f.overdrive(waveform, gain=20.0)
@@ -157,24 +169,34 @@ class AudioSynthesier:
 
 
 
-    def SadnessSynthesise(self, filepath, index):
+    def SadnessSynthesise(self, filepath):
         waveform, sample_rate = torchaudio.load(filepath)
 
-        waveform = f.speed(waveform, sample_rate, 0.85)
+        if sample_rate is None:
+            sample_rate = 24000
+
+        waveform, sample_rate = f.speed(waveform, sample_rate, 0.85)
         waveform = f.pitch_shift(waveform, sample_rate, n_steps=-3)
         waveform = f.gain(waveform, gain_db=6)
 
         self.audioChunks.append((waveform.clone(), sample_rate))
 
-    def HappinessSynthesise(self, filepath, index):
+    def HappinessSynthesise(self, filepath):
         waveform, sample_rate = torchaudio.load(filepath)
 
-        waveform = f.speed(waveform, sample_rate, 1.2)
+        if sample_rate is None:
+            sample_rate = 24000
+
+        waveform, sample_rate = f.speed(waveform, sample_rate, 1.2)
         waveform = f.pitch_shift(waveform, sample_rate, n_steps=3)
         waveform = f.gain(waveform, gain_db=2)
 
         self.audioChunks.append((waveform.clone(), sample_rate))
     
-    def NeutralSynthesis(self, filepath, index):
+    def NeutralSynthesis(self, filepath):
         waveform, sample_rate = torchaudio.load(filepath)
+
+        if sample_rate is None:
+            sample_rate = 24000
+
         self.audioChunks.append((waveform.clone(), sample_rate))

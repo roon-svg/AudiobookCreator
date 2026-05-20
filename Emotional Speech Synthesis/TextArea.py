@@ -17,6 +17,7 @@ class OpenFile:
                     QMessageBox.warning(self, "File Too Large", "The selected file is too large. Please select a file smaller than 5 MB.")
                     return
 
+                # This opens the file and sets the text area to the content of the file
                 with open(filePath, 'r', encoding='utf-8', errors='ignore') as file:
                     content = file.read()
                     self.textArea.setPlainText(content)

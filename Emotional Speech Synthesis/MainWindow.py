@@ -65,6 +65,7 @@ class MainWindow(QMainWindow):
     
 
     def apply_emotion(self, emotion):
+        # This allow for the user to highlight the text of what colour they want in according to the emotion
         cursor = self.textArea.textCursor()
         if cursor.hasSelection():
             fmt = QTextCharFormat()

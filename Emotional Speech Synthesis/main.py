@@ -16,5 +16,6 @@ if __name__ == "__main__":
     editor = MainWindow.MainWindow()
     editor.show()
     
+    # this allows the application to run until the user closes it
     sys.exit(app.exec())
 
