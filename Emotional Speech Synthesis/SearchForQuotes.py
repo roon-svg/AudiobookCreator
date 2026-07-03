@@ -10,8 +10,9 @@ class QuoteSearch:
         format.setBackground(Qt.lightGray)
         self.format = format
 
-        #self.pattern = [r'"(.*?)"|(?<!\w)\'(.*?)\'(?<!\w)']
-        self.pattern = r'"([^"\\]*(?:\\.[^"\\]*)*)"|\b\'([^\'\\]*(?:\\.[^\'\\]*)*)\'\b'
+        #self.pattern = r'"([^"\\]*(?:\\.[^"\\]*)*)"'
+        self.pattern = r'["“][^""“”]*["”]'
+        #self.pattern = r'"([^"\\]*(?:\\.[^"\\]*)*)"|\b\'([^\'\\]*(?:\\.[^\'\\]*)*)\'\b'
 
     def searchForQuotes(self):
         results = []
@@ -22,13 +23,17 @@ class QuoteSearch:
         self.textArea.blockSignals(True)  # Disable signals to prevent UI updates during processing
 
         # This goes through the text and finds any quotes, then adds them to a list and highlights them in the text area
-        for pattern in self.pattern:
-            for match in re.finditer(pattern, text):
-                quote = match.group()
-                results.append(quote)
-                cursor.setPosition(match.start())
-                cursor.setPosition(match.end(), QTextCursor.KeepAnchor)
-                cursor.mergeCharFormat(self.format)
+        for match in re.finditer(self.pattern, text):
+            quote = match.group()
+            results.append(quote)
+            cursor.setPosition(match.start())
+            cursor.setPosition(match.end(), QTextCursor.KeepAnchor)
+            cursor.mergeCharFormat(self.format)
 
-                self.textArea.blockSignals(False)  # Re-enable signals after processing
+            self.textArea.setTextCursor(cursor)
+
+        self.textArea.blockSignals(False)  # Re-enable signals after processing
+        self.textArea.viewport().update()
+        print(f"Found {len(results)} quotes.")
+
         return results

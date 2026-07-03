@@ -1,7 +1,9 @@
-import gtts
+import edge_tts
+import asyncio
 from PySide6.QtGui import QTextCursor, QColor
-from PySide6.QtWidgets import QFileDialog, QTextEdit
+from PySide6.QtWidgets import QFileDialog, QProgressDialog, QTextEdit
 import torchaudio.functional as f
+import torchaudio.transforms as T
 import torchaudio
 import torch
 import os
@@ -95,13 +97,19 @@ class AudioSynthesier:
 
         tempFileNames = []
 
+        # This creates a progress dialog to show the user that the audiobook is being generated
+        progressDialog = QProgressDialog("Generating audiobook...", None, 0, 0, parent_window)
+        progressDialog.setCancelButton(None)
+        progressDialog.show()
+        # end of progress dialog code
+
         for text, emotion in TextToConvertToSpeech:
             
             tempFileName = f"temp_audio_{audioChunksIndex}.wav"
             tempFileNames.append(tempFileName)
 
-            tts = gtts.gTTS(text)
-            tts.save(tempFileName)
+            tts = edge_tts.Communicate(text)
+            asyncio.run(tts.save(tempFileName))
 
             # This checks the emotion and then calls the corresponding function to synthesise the audio, then it removes the temporary file
             if emotion == "Anger":
@@ -113,8 +121,6 @@ class AudioSynthesier:
             else:
                 self.NeutralSynthesis(tempFileName)
             
-            if os.path.exists(tempFileName):
-                os.remove(tempFileName)
             audioChunksIndex += 1
         
         if self.audioChunks:
@@ -150,6 +156,8 @@ class AudioSynthesier:
                 print(f"Permission error: Could not remove temporary file {file}. It may still be in use.") 
             except Exception as e:
                 print(f"Error removing temporary file {file}: {e}")
+        
+        progressDialog.close()
 
     
     # These functions make the audio sound more like the emotion, by changing the speed, pitch, gain and overdrive
@@ -158,15 +166,21 @@ class AudioSynthesier:
 
         if sample_rate is None:
             sample_rate = 24000
-
-        waveform, sample_rate = f.speed(waveform, sample_rate, 1.2)
-        waveform = f.pitch_shift(waveform, sample_rate, n_steps=4)
-        waveform = f.gain(waveform, gain_db=5)
-        waveform = f.overdrive(waveform, gain=20.0)
         
+        waveform = f.pitch_shift(waveform, sample_rate, n_steps=-0.8)
+        waveform, _ = f.speed(waveform, sample_rate, 1.16)
 
+        waveform = f.highpass_biquad(waveform, sample_rate, cutoff_freq=90)
+        waveform = f.equalizer_biquad(waveform, sample_rate, center_freq=220, gain=6, Q=1.0)
+        waveform = f.equalizer_biquad(waveform, sample_rate, center_freq=2700, gain=7, Q=1.2)
+        waveform = f.equalizer_biquad(waveform, sample_rate, center_freq=5000, gain=2, Q=1.0)
+
+        waveform = f.gain(waveform, gain_db=9)
+        waveform = torch.tanh(waveform * 1.8)
+        waveform = f.overdrive(waveform, gain=5.0)
+        waveform = torch.tanh(waveform * 2.2)
+        
         self.audioChunks.append((waveform.clone(), sample_rate))
-
 
 
     def SadnessSynthesise(self, filepath):
@@ -175,9 +189,17 @@ class AudioSynthesier:
         if sample_rate is None:
             sample_rate = 24000
 
-        waveform, sample_rate = f.speed(waveform, sample_rate, 0.85)
-        waveform = f.pitch_shift(waveform, sample_rate, n_steps=-3)
-        waveform = f.gain(waveform, gain_db=6)
+
+        waveform = f.pitch_shift(waveform, sample_rate, n_steps=-0.1)
+        waveform, _ = f.speed(waveform, sample_rate, 0.9)
+
+        waveform = f.highpass_biquad(waveform, sample_rate, cutoff_freq=90)
+        waveform = f.equalizer_biquad(waveform, sample_rate, center_freq=3000, gain=-2.5, Q=1.0)
+
+        silence = torch.zeros((waveform.shape[0], int(0.1 * sample_rate)))
+        waveform = torch.cat([waveform, silence], dim=1)
+
+        waveform = f.gain(waveform, gain_db=-1.5)
 
         self.audioChunks.append((waveform.clone(), sample_rate))
 
@@ -187,9 +209,12 @@ class AudioSynthesier:
         if sample_rate is None:
             sample_rate = 24000
 
-        waveform, sample_rate = f.speed(waveform, sample_rate, 1.2)
-        waveform = f.pitch_shift(waveform, sample_rate, n_steps=3)
-        waveform = f.gain(waveform, gain_db=2)
+        waveform = f.pitch_shift(waveform, sample_rate, n_steps=0.1)
+        waveform, _ = f.speed(waveform, sample_rate, 1.05)
+
+        waveform = f.equalizer_biquad(waveform, sample_rate, center_freq=3500, gain=2.5, Q=1.0)
+
+        waveform = f.gain(waveform, gain_db=1.5)
 
         self.audioChunks.append((waveform.clone(), sample_rate))
     
